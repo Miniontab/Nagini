@@ -108,24 +108,24 @@ long int IR_Left = 0xFF10EF;              // A variable that holds an "move left
 //-------------- Servo motor related preamble -----------------------
 // Creating servo objects, declaring how many and placing them in an array:
 Servo Servo1;
-Servo Servo2;
-Servo Servo3;
-Servo Servo4;
+//Servo Servo2;
+//Servo Servo3;
+//Servo Servo4;
 
 // Declaring how many servos are connected
-const int N = 4;
+const int N = 1;
 
 // Create an array of all servo objects
-Servo servoArray[N] = {Servo1, Servo2, Servo3, Servo4};
+Servo servoArray[N] = {Servo1};
 
 
 // Declaring servo pins and putting them in an array
 int servo1Pin = 53;   //Head                 
-int servo2Pin = 51;   //2nd link
-int servo3Pin = 49;   //3rd link
-int servo4Pin = 47;   //4th link
+//int servo2Pin = 51;   //2nd link
+//int servo3Pin = 49;   //3rd link
+//int servo4Pin = 47;   //4th link
 
-int servoPinarray[N] = {servo1Pin, servo2Pin, servo3Pin, servo4Pin};  // Create an array of servo pins
+int servoPinarray[N] = {servo1Pin};  // Create an array of servo pins
 
 
 
@@ -138,7 +138,7 @@ int i = Origin_pos;                     // Global variable to turn the head and 
 
 //-------------- DC Motor related preamble --------------------------
 // Defining input- and enable pins:
-#define EN 12  // white cable (used for speed control by adjusting PWM signal to motor)
+#define EN 5  // white cable (used for speed control by adjusting PWM signal to motor)
 #define IN2 7 // orange cable (-)
 #define IN1 6 // yellow cable (+)
 
@@ -156,8 +156,8 @@ LiquidCrystal_I2C LCD_Screen(0x27, 2, 1, 0, 4, 5, 6, 7);         // Format: (I2C
 
 // Defining pins for trigger (TRIG) and echo (ECHO):
 
-#define tPin 13 // hvit
-#define ePin 2 //gul
+#define tPin 9 // hvit
+#define ePin 10 //gul
 
 // Declaring variables for duration (how long it takes for a transmitted ultrasonic wave to be received)
 // and distance (how far it is to an object)
@@ -212,7 +212,7 @@ void setup() {
   IR_Receiver.blink13(true);
 
   // Resetting the IR receiving value:
-  IR_Results.value = 1;
+  IR_Results.value = 0;
 
   // Defining an interrupt so that whenever IR receiver gets new exit signal from remote, it is handled:
   attachInterrupt(digitalPinToInterrupt(IR_DataPin), getIRval, CHANGE);
@@ -220,18 +220,19 @@ void setup() {
   //------------ Servo motor related setup -------------------------
   // Attaching all servos:
   Servo1.attach(servo1Pin);
-  Servo2.attach(servo2Pin);
-  Servo3.attach(servo3Pin);
-  Servo4.attach(servo4Pin);
+  Servo1.write(Origin_pos);
+//  Servo2.attach(servo2Pin);
+//  Servo3.attach(servo3Pin);
+  //Servo4.attach(servo4Pin);
 
   // Initial correction of Servo motors:
   // All connected servo motors are turned to their original position (facing straight)
-  servoSetup(N, Left_pos);            // Then they're turned so that the link is facing left.
-  delay(1000);
-  servoSetup(N, Right_pos);          // When we turn them back to the original position now, they're accurately positioned.
-  delay(1000);
-  servoSetup(N, Origin_pos);
-
+//  servoSetup(N, Left_pos);            // Then they're turned so that the link is facing left.
+//  delay(1000);
+//  servoSetup(N, Right_pos);          // When we turn them back to the original position now, they're accurately positioned.
+//  delay(1000);
+//  servoSetup(N, Origin_pos);
+Servo1.write(Origin_pos);
 
   //----------- DC motor related setup -----------------------------
   // Setting input- and enable pins as output:
@@ -289,16 +290,89 @@ void StateMachine() {
       break;
 
     case Auto:
-      A();
+      Serial.println("Nå er jeg i start av A");
+      ExitCheck();      
+      A_Mealy2();
+      
       break;
 
     case Manual:
-      M();
-      break;
+      //Serial.println("Nå er jeg i manual");
+  Serial.println("Nå er jeg i start av M");  
+  ExitCheck();
+  
+  
+  if(IR_Receiver.decode(&IR_Results)){
+  switch (IR_Results.value) {
+      case 0xFF18E7:                               // If the IR value is forward:
+        // Move forwards:
+        analogWrite(EN, 255);
+        digitalWrite(IN2, HIGH);
+        digitalWrite(IN1, LOW);
+    
+        Serial.println("Moving forward");
+        IR_Receiver.resume();                  // Resume IR reception
+
+        break;
+
+      case 0xFF4AB5:                          // If the IR value is backward_
+        // Move backwards:
+        analogWrite(EN, 100);
+        digitalWrite(IN2, LOW);
+        digitalWrite(IN1, HIGH);
+    
+        Serial.println("Moving backward");
+        IR_Receiver.resume();                  // Resume IR reception
+
+        break;
+
+        case 0xFF5AA5:                          // If the IR value is turn right
+         // Turn head right:
+        for (i; i >= Right_pos + 25; i = i - 10) {
+          Servo1.write(i);
+        }
+        // Move forwards:
+        analogWrite(EN, 255);
+        digitalWrite(IN2, LOW);
+        digitalWrite(IN1, HIGH);
+    
+        IR_Receiver.resume();                  // Resume IR reception
+
+        break;
+
+        case 0xFF10EF:                          // If the IR value is turn left
+         // Turn head left:
+        for (i; i <= Left_pos + 25; i = i + 10) {
+          Servo1.write(i);
+        }
+        // Move forwards:
+        analogWrite(EN, 255);
+        digitalWrite(IN2, LOW);
+        digitalWrite(IN1, HIGH);
+    
+        IR_Receiver.resume();                  // Resume IR reception
+
+        break;
+
+        default:
+        nextState = Manual;           // Start Manual again
+        presentState = nextState;   // Update state
+
+        break;
+
+
+    }
+  }
+
+  break;
+
+ 
+      
   }
 }
 
 void BU() {
+  Serial.println("Nå er jeg i Bootup");
 
 
   // State box: Moore statement: Display following message on LCD: "Choose operational mode" on first row, "l(AUTO)/0(MAN)" on second row:
@@ -330,7 +404,7 @@ void BU() {
         delay(4000);                           // Hold message for 4 seconds
         LCD_Screen.clear();                    // Clear screen
 
-        //IR_Results.value = 0;                // Reset the IR value
+        IR_Results.value = 0;                // Reset the IR value
 
         IR_Receiver.resume();                  // Resume IR reception
 
@@ -350,7 +424,7 @@ void BU() {
 
         IR_Receiver.resume();               // Resume IR reception
 
-        //IR_Results.value = 0;             // Reset the IR value
+        IR_Results.value = 0;             // Reset the IR value
 
 
         nextState = Manual;                 // Set the state to transition to (Manual in this case)
@@ -397,8 +471,7 @@ void BU() {
 }
 
 void A() {
-  ExitCheck();
-  A_Mealy2();
+ 
 }
 
 
@@ -415,16 +488,23 @@ void A_Scan() {
       Servo1.write(i);
     }
 
+    Serial.print("i er "); Serial.println(i);
+
   } else if (Origin_pos < i <= Left_pos) {        // if the position of the head is left
 
     // Turning the head slowly from left, to right:
     for (i; i >= Right_pos + 25; i = i - 10) {  // Turning the head from left to right
       Servo1.write(i);
     }
+
+    Serial.print("i er "); Serial.println(i);
+    
   } else if (Origin_pos > i >= Right_pos) { // if the position of the head is right
     for (i; i <= Left_pos + 25; i = i + 10) {  // Turning head from right to left
       Servo1.write(i);
     }
+
+    Serial.print("i er "); Serial.println(i);
 
   }
 
@@ -453,16 +533,19 @@ void DistCheck() {
 
   t = pulseIn(ePin, HIGH);
 
-  dist = t * 0.034 / 2;
+  dist = t*0.034/2;
 
 }
 
 void A_Mealy2() {
+
+Serial.println("Nå er jeg i mealy2");
+  
 Second_Mealy:
   DistCheck();
   DistPrint();
 
-  if (dist < 10) {
+  if (dist < 10 && dist !=0) {
     // Move backwards:
     analogWrite(EN, 155);
     digitalWrite(IN2, HIGH);
@@ -477,6 +560,9 @@ Second_Mealy:
 }
 
 void A_Mealy3() {
+
+Serial.println("Nå er jeg i mealy3");
+  
 Third_Mealy:
   DistCheck();
   DistPrint();
@@ -500,40 +586,8 @@ Third_Mealy:
 }
 
 void M() {
-  ExitCheck();
 
-  if (IR_Results.value == IR_Forward) {  // If ir_signal is forward then move forwards
-    // Move forwards:
-    analogWrite(EN, 255);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN1, HIGH);
-  } else if (IR_Results.value == IR_Backward) {  // If ir_signal is backward then move backwards
-    // Move backwards:
-    analogWrite(EN, 155);
-    digitalWrite(IN2, HIGH);
-    digitalWrite(IN1, LOW);
-  } else if (IR_Results.value == IR_Right) {  // If ir_signal is right then turn right
-    // Turn head right:
-    for (i; i >= Right_pos + 25; i = i - 10) {
-      Servo1.write(i);
-    }
-    // Move forwards:
-    analogWrite(EN, 255);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN1, HIGH);
-  } else if (IR_Results.value == IR_Left) {   // If ir_signal is left then turn left
-    // Turn head left:
-    for (i; i <= Left_pos + 25; i = i + 10) {
-      Servo1.write(i);
-    }
-    // Move forwards:
-    analogWrite(EN, 255);
-    digitalWrite(IN2, LOW);
-    digitalWrite(IN1, HIGH);
-  } else {
-    nextState = Manual;           // Start Manual again
-    presentState = nextState;   // Update state
-  }
+  
 
 
 }
@@ -544,22 +598,31 @@ void M() {
 
 
 void ExitCheck() {
+
+  Serial.println("Nå er jeg i exitcheck");
+  Serial.println(IR_Results.value, HEX);
+  
   // Check if the IR signal value is equal to the exit value:
-  if (IR_Results.value == IR_Exit ) {   // In case it is a match, then the LCD_Screen is cleared, cursor is set to 0,0,
+  if (IR_Results.value == IR_Exit) {   // In case it is a match, then the LCD_Screen is cleared, cursor is set to 0,0,
     // and a message saying "exiting" is displayed for 2 seconds.
     LCD_Screen.clear();
     LCD_Screen.home();
     LCD_Screen.print("Exiting...");
+    IR_Receiver.resume();                  // Resume IR reception
+
+    Serial.println("nå var koden exit");
 
     // Correction of Servo motors:
     // All connected servo motors are turned to their original position (facing straight)
-    servoSetup(N, Left_pos);               // Then they're turned so that the link is facing left.
-    delay(1000);
-    servoSetup(N, Right_pos);            // When we turn them back to the original position now, they're accurately positioned.
-    delay(1000);
+//    servoSetup(N, Left_pos);               // Then they're turned so that the link is facing left.
+//    delay(1000);
+//    servoSetup(N, Right_pos);            // When we turn them back to the original position now, they're accurately positioned.
+//    delay(1000);
     servoSetup(N, Origin_pos);
 
-    delay(2000);                         // Give the motors 2 seconds to adjust
+    i = Origin_pos;                       // Update head position variable i: Position of head is now straight ahead (original position)
+
+    //delay(2000);                         // Give the motors 2 seconds to adjust
 
     nextState = BootUp;                // Transition back to Bootup if exit key is pressed
 
@@ -567,6 +630,12 @@ void ExitCheck() {
 
   }
 
+
+  if(presentState == BootUp){
+        StateMachine();
+      }
+  
+ 
 
 }
 
